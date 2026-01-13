@@ -237,7 +237,9 @@ EXTENSION_TO_LANGUAGE = {
     ".cs": "csharp",
     ".php": "php",
     ".phtml": "php",
-    ".inc": "php"
+    ".phtml": "php",
+    ".inc": "php",
+    ".go": "go"
 }
 
 

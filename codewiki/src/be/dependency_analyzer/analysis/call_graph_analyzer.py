@@ -13,6 +13,7 @@ from pathlib import Path
 from codewiki.src.be.dependency_analyzer.models.core import Node, CallRelationship
 from codewiki.src.be.dependency_analyzer.utils.patterns import CODE_EXTENSIONS
 from codewiki.src.be.dependency_analyzer.utils.security import safe_open_text
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -134,6 +135,8 @@ class CallGraphAnalyzer:
                 self._analyze_cpp_file(file_path, content, repo_dir)
             elif language == "php":
                 self._analyze_php_file(file_path, content, repo_dir)
+            elif language == "go":
+                self._analyze_go_file(file_path, content, repo_dir)
             # else:
             #     logger.warning(
             #         f"Unsupported language for call graph analysis: {language} for file {file_path}"
@@ -323,6 +326,41 @@ class CallGraphAnalyzer:
             self.call_relationships.extend(relationships)
         except Exception as e:
             logger.error(f"Failed to analyze PHP file {file_path}: {e}", exc_info=True)
+
+    def _analyze_go_file(self, file_path: str, content: str, repo_dir: str):
+        """
+        Analyze Go file using the coma-go binary wrapper.
+
+        Args:
+            file_path: Relative path to the Go file
+            content: File content string
+            repo_dir: Repository base directory
+        """
+        # Skip Go test files (similar to Python's _test_ function filtering)
+        if str(file_path).endswith("_test.go"):
+            logger.debug(f"Skipping Go test file: {file_path}")
+            return
+
+        from codewiki.src.be.dependency_analyzer.analyzers.go import analyze_go_file
+
+        try:
+            # Reconstruct absolute path because coma-go might need it or works better with it
+            # The analyze_go_file wrapper handles the binary call
+            # Note: file_path here is relative, we might need absolute for the binary if we are traversing
+            # But the wrapper logic takes what we give it.
+            # Ideally we pass absolute path to binary if possible, or ensure CWD is correct.
+            # For now, let's assume we pass the full path constructed from repo_dir
+            abs_path = os.path.join(repo_dir, file_path)
+            
+            functions, relationships = analyze_go_file(abs_path, content, repo_path=repo_dir)
+
+            for func in functions:
+                func_id = func.id if func.id else f"{file_path}:{func.name}"
+                self.functions[func_id] = func
+
+            self.call_relationships.extend(relationships)
+        except Exception as e:
+            logger.error(f"Failed to analyze Go file {file_path}: {e}", exc_info=True)
 
     def _resolve_call_relationships(self):
         """
